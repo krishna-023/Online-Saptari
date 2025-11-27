@@ -13,10 +13,11 @@ return new class extends Migration
     {
         Schema::create('items', function (Blueprint $table) {
             $table->id();
-            $table->unsignedBigInteger('reference_id')->nullable(); // Ensure this line exists
+            $table->unsignedBigInteger('reference_id')->nullable()->change(); // Ensure this line exists
             $table->string('title');
+            $table->string('slug')->unique();
             $table->string('subtitle')->nullable();
-            $table->string('content')->nullable();
+            $table->text('content')->nullable();
             $table->string('item_featured')->nullable();
             $table->date('collection_date')->nullable();
             $table->string('permalink')->nullable();
@@ -25,10 +26,13 @@ return new class extends Migration
             $table->string('author_email')->nullable();
             $table->string('author_first_name')->nullable();
             $table->string('author_last_name')->nullable();
-            $table->string('slug');
+                        $table->string('item_locations')->nullable();
             $table->string('parent')->nullable(); // Changed from varchar to string and made nullable
             $table->string('parent_slug')->nullable(); // Changed from varchar to string and made nullable
             $table->foreignId('category_id')->constrained('categories')->onDelete('cascade'); // Added category_id with foreign key
+            $table->decimal('ait_latitude', 10, 8)->nullable();
+            $table->decimal('ait_longitude', 11, 8)->nullable();
+            $table->enum('status', ['active', 'inactive'])->default('active');
             $table->timestamps();
         });
     }

@@ -17,7 +17,8 @@ return new class extends Migration
             $table->string('telephone')->nullable();
             $table->string('phone1')->nullable();
             $table->string('phone2')->nullable();
-            $table->string('email')->unique()->nullable();
+            $table->string('email')->nullable();
+            $table->boolean('showemail')->nullable();
             $table->boolean('contactOwnerBtn')->nullable();
             $table->string('web')->nullable();
             $table->string('webLinkLabel')->nullable();

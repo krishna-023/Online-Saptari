@@ -6,22 +6,19 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('categories', function (Blueprint $table) {
             $table->id();
-            $table->string('Category_Name');
-            $table->integer('reference_id')->nullable(); // Adjust the type and constraints as needed
-            $table->timestamps();
+            $table->string('Category_Name');          // Category name
+            $table->integer('parent_id')->nullable(); // Parent category
+            $table->integer('reference_id')->nullable(); // Reference ID (if needed)
+            $table->string('slug')->nullable();       // Slug for URLs
+            $table->enum('category_status', ['active', 'inactive'])->default('active'); // Status
+            $table->timestamps();                     // created_at and updated_at
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('categories');

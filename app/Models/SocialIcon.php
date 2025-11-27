@@ -15,7 +15,10 @@ class SocialIcon extends Model
         'socialIcons',
         'socialIcons_url',
     ];
-
+ protected $casts = [
+        'displaySocialIcons' => 'boolean',
+        'socialIconsOpenInNewWindow' => 'boolean',
+    ];
     // Define the relationship with Category
     public function item()
     {

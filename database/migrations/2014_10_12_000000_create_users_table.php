@@ -1,9 +1,7 @@
 <?php
 
-use App\Models\User;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -15,14 +13,25 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
+
+            // Basic info
             $table->string('name');
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
+
+            // Role & permissions
+            $table->enum('role', ['user', 'admin', 'super-admin'])->default('user');
+            $table->json('permissions')->nullable();
+
+            // Auth
             $table->string('password');
             $table->rememberToken();
+
+            // Profile
+            $table->string('profile_picture')->nullable(); // ✅ added profile_picture column
+
             $table->timestamps();
         });
-        User::create(['name' => 'admin','email' => 'admin@themesbrand.com','password' => Hash::make('12345678'),'email_verified_at'=>'2023-07-10 05:46:38','created_at' => now(),]);
     }
 
     /**

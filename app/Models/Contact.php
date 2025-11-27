@@ -14,6 +14,7 @@ class Contact extends Model
         'phone1',
         'phone2',
         'email',
+        'showemail',
         'contactOwnerBtn',
         'web',
         'webLinkLabel',
@@ -26,6 +27,17 @@ class Contact extends Model
         'swzoom',
 
     ];
+     protected $casts = [
+        'showemail' => 'boolean',
+        'contactOwnerBtn' => 'boolean',
+        'streetview' => 'boolean',
+        'swheading' => 'integer',
+        'swpitch' => 'integer',
+        'swzoom' => 'integer',
+        'latitude' => 'decimal:8',
+        'longitude' => 'decimal:8',
+    ];
+
     // Contact.php
     public function item()
     {

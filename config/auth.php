@@ -35,12 +35,19 @@ return [
     |
     */
 
-    'guards' => [
-        'web' => [
-            'driver' => 'session',
-            'provider' => 'users',
-        ],
+   'guards' => [
+    'web' => [
+        'driver' => 'session',
+        'provider' => 'users',
+    'admin' => ['driver' => 'session', 'provider' => 'admins'],
     ],
+
+    'api' => [
+        'driver' => 'sanctum',  // This should be 'sanctum' not 'token'
+        'provider' => 'users',
+        'hash' => false,
+    ],
+],
 
     /*
     |--------------------------------------------------------------------------

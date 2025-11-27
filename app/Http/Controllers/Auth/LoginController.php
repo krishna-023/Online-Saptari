@@ -26,9 +26,9 @@ class LoginController extends Controller
      *
      * @var string
      */
-    protected $redirectTo = '/index'; // or route('items.index') if you have a named route
+protected $redirectTo = RouteServiceProvider::HOME;
     // protected $redirectTo = RouteServiceProvider::HOME;
-    protected $redirectAfterLogout = '/login';
+    protected $redirectAfterLogout = '/';
     /**
      * Create a new controller instance.
      *

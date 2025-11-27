@@ -4,23 +4,23 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Str;
 
 class Item extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'category_id', 'reference_id', 'title', 'subtitle', 'content', 'item_featured',
-        'collection_date', 'permalink', 'image', 'author_username', 'author_email', 'author_first_name',
-        'author_last_name', 'slug', 'parent', 'parent_slug', 'telephone', 'phone1', 'phone2',
-        'email', 'contactOwnerBtn', 'web', 'webLinkLabel', 'address', 'latitude', 'longitude',
-        'streetview', 'swheading', 'swpitch', 'swzoom', 'displayOpeningHours', 'openingHoursMonday',
-        'openingHoursTuesday', 'openingHoursWednesday', 'openingHoursThursday', 'openingHoursFriday',
-        'openingHoursSaturday', 'openingHoursSunday', 'openingHoursNote', 'displaySocialIcons',
-        'socialIconsOpenInNewWindow', 'socialIcons', 'socialIcons_url', 'displayGallery', 'gallery'
+        'category_id', 'reference_id', 'title', 'subtitle', 'content',
+        'item_featured', 'collection_date', 'permalink', 'image',
+        'author_username', 'author_email', 'author_first_name', 'author_last_name',
+        'slug', 'parent', 'parent_slug', 'status'
     ];
 
-    protected $dates = ['collection_date']; // Automatically cast 'collection_date' to DateTime
+protected $casts = [
+            'item_featured' => 'boolean',
+    'collection_date' => 'datetime',
+];
 
     public function category()
     {
@@ -29,14 +29,13 @@ class Item extends Model
 
     public function contacts()
     {
-        return $this->hasMany(Contact::class, 'item_id', 'id');
+        return $this->hasOne(Contact::class, 'item_id', 'id');
     }
 
-    public function opening_Time()
+    public function openingTimes()
     {
-        return $this->hasOne(Opening_Time::class, 'item_id', 'id');
+        return $this->hasOne(OpeningTime::class, 'item_id');
     }
-
     public function socialIcons()
     {
         return $this->hasMany(SocialIcon::class, 'item_id', 'id');
@@ -46,9 +45,44 @@ class Item extends Model
     {
         return $this->hasMany(Gallery::class, 'item_id', 'id');
     }
-
-    public function getFormattedDateAttribute()
+public function getFeaturedImageUrlAttribute(): ?string
     {
-        return $this->collection_date ? $this->collection_date->format('d-m-Y') : 'N/A';
+        if (!$this->image) {
+            return null;
+        }
+
+        return asset('storage/' . $this->image);
+    }
+    public static function generateUniqueSlug($title, $id = null)
+    {
+        $slug = Str::slug($title);
+        $originalSlug = $slug;
+        $count = 1;
+
+        while (self::where('slug', $slug)
+            ->when($id, fn($q) => $q->where('id', '!=', $id))
+            ->exists()) {
+            $slug = $originalSlug . '-' . $count;
+            $count++;
+        }
+
+        return $slug;
+    }
+
+    protected static function booted()
+    {
+        static::creating(function ($item) {
+            $slug = self::generateUniqueSlug($item->title);
+            $item->slug = $slug;
+            $item->permalink = url('/items/' . $slug);
+        });
+
+        static::updating(function ($item) {
+            if ($item->isDirty('title')) {
+                $slug = self::generateUniqueSlug($item->title, $item->id);
+                $item->slug = $slug;
+                $item->permalink = url('/items/' . $slug);
+            }
+        });
     }
 }

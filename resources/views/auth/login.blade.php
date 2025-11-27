@@ -1,4 +1,4 @@
-@extends('layouts.master-without-nav')
+@extends('admin.layouts.master-without-nav')
 @section('title')
     @lang('translation.signin')
 @endsection
@@ -100,7 +100,7 @@
                                             <p class="text-muted">Sign in to continue to Steex.</p>
                                         </div>
                                         <div class="p-2 mt-5">
-                                            <form action="{{ route('login') }}" method="post">
+                                            <form action="{{ route('login.submit') }}" method="post">
                                                 @csrf
 
                                                 <div class="mb-3">
