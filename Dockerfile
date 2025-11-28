@@ -1,36 +1,28 @@
-# Use PHP 8.2 with Apache (Laravel 11 requires PHP >= 8.2)
-FROM php:8.2-apache
-
-# Install required packages
-RUN apt-get update && apt-get install -y \
-    libzip-dev zip unzip git libpng-dev libonig-dev libxml2-dev
-
-# Install required PHP extensions for Laravel 11
-RUN docker-php-ext-install pdo pdo_mysql zip bcmath gd pcntl
-
-# Enable Apache mod_rewrite
-RUN a2enmod rewrite
+# Use official PHP image with extensions
+FROM php:8.2-fpm
 
 # Set working directory
 WORKDIR /var/www/html
 
-# Copy Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    unzip \
+    libzip-dev \
+    curl \
+    && docker-php-ext-install pdo_mysql zip
 
-# Copy Laravel project files
-COPY . /var/www/html
+# Install Composer
+COPY --from=composer:2.6 /usr/bin/composer /usr/bin/composer
 
-# Install dependencies optimized for production
-RUN composer install --no-dev --prefer-dist --optimize-autoloader
+# Copy project files
+COPY . .
 
-# Set permissions for storage and cache
-RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 775 storage bootstrap/cache
+# Install PHP dependencies
+RUN composer install --optimize-autoloader --no-dev
 
-# Add Apache configuration for Laravel
-RUN echo "<Directory /var/www/html/public>\n\
-    AllowOverride All\n\
-    Require all granted\n\
-</Directory>" > /etc/apache2/conf-available/laravel.conf
+# Expose port
+EXPOSE 8000
 
-RUN a2enconf laravel
+# Start Laravel development server
+CMD php artisan serve --host=0.0.0.0 --port=8000
