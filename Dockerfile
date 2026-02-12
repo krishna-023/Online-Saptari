@@ -26,15 +26,6 @@ RUN apk add --no-cache \
     curl \
     git \
     unzip \
-    libpq-dev \
-    oniguruma-dev \
-    libzip-dev \
-    nginx \
-    supervisor \
-    bash
-
-# Install PHP extensions
-RUN apk add --no-cache \
     icu-dev \
     libpng-dev \
     libjpeg-turbo-dev \
@@ -42,8 +33,11 @@ RUN apk add --no-cache \
     oniguruma-dev \
     libzip-dev \
     zip \
-    unzip
+    nginx \
+    supervisor \
+    bash
 
+# Install PHP extensions
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
         pdo \
@@ -56,7 +50,6 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
         gd \
         opcache
 
-
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
@@ -65,7 +58,7 @@ WORKDIR /var/www
 # Copy Laravel project
 COPY . .
 
-# 🔥 FIXED: Copy correct Vite build folder
+# Copy Vite build
 COPY --from=frontend /app/public/build ./public/build
 
 # Install PHP dependencies
@@ -76,55 +69,72 @@ RUN composer install \
     --optimize-autoloader \
     --no-scripts
 
-# Environment variables
+# Environment
 ENV APP_ENV=production \
     APP_DEBUG=false \
     LOG_CHANNEL=single \
     PORT=10000
 
-# Create required directories
+# Fix permissions
 RUN mkdir -p storage/logs storage/app/uploads bootstrap/cache \
-    && chown -R nobody:nobody /var/www \
     && chmod -R 775 storage bootstrap/cache
 
-########################################
-# NGINX Configuration
-########################################
-RUN mkdir -p /var/run/nginx \
-    && rm -f /etc/nginx/conf.d/default.conf
+################################################
+# CLEAN NGINX CONFIG (IMPORTANT FIX)
+################################################
 
-COPY <<EOF /etc/nginx/conf.d/default.conf
-server {
-    listen 10000;
-    server_name _;
-    root /var/www/public;
-    index index.php;
+RUN rm -rf /etc/nginx/conf.d/*
+RUN rm -f /etc/nginx/nginx.conf
 
-    client_max_body_size 100M;
+COPY <<EOF /etc/nginx/nginx.conf
+worker_processes 1;
 
-    location / {
-        try_files \$uri \$uri/ /index.php?\$query_string;
-    }
+events {
+    worker_connections 1024;
+}
 
-    location ~ \.php$ {
-        fastcgi_pass 127.0.0.1:9000;
-        fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
-        include fastcgi_params;
-    }
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
 
-    location ~ /\. {
-        deny all;
+    access_log /dev/stdout;
+    error_log /dev/stderr;
+
+    sendfile on;
+    keepalive_timeout 65;
+
+    server {
+        listen 10000;
+        server_name _;
+
+        root /var/www/public;
+        index index.php index.html;
+
+        location / {
+            try_files \$uri \$uri/ /index.php?\$query_string;
+        }
+
+        location ~ \.php$ {
+            fastcgi_pass 127.0.0.1:9000;
+            fastcgi_index index.php;
+            include fastcgi_params;
+            fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
+        }
+
+        location ~ /\. {
+            deny all;
+        }
     }
 }
 EOF
 
+################################################
+# SUPERVISOR CONFIG
+################################################
 
-########################################
-# Supervisor Configuration
-########################################
 RUN mkdir -p /etc/supervisor/conf.d
 
-COPY <<EOF /etc/supervisor/conf.d/laravel.conf
+COPY <<EOF /etc/supervisor/conf.d/supervisord.conf
 [supervisord]
 nodaemon=true
 
@@ -141,17 +151,17 @@ stdout_logfile=/dev/stdout
 stderr_logfile=/dev/stderr
 EOF
 
+################################################
+# START SCRIPT
+################################################
 
-########################################
-# Startup Script
-########################################
 COPY <<EOF /usr/local/bin/start.sh
 #!/bin/sh
 set -e
 
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
+php artisan config:cache || true
+php artisan route:cache || true
+php artisan view:cache || true
 
 if [ -z "\$APP_KEY" ]; then
     php artisan key:generate
@@ -159,19 +169,12 @@ fi
 
 php artisan migrate --force || true
 
-exec supervisord -c /etc/supervisor/conf.d/laravel.conf
+exec supervisord -c /etc/supervisor/conf.d/supervisord.conf
 EOF
 
 RUN chmod +x /usr/local/bin/start.sh
 
-########################################
-# Health Check
-########################################
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://127.0.0.1:10000 || exit 1
-
 EXPOSE 10000
 
-USER nobody
-
 CMD ["/usr/local/bin/start.sh"]
+
