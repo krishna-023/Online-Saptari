@@ -34,7 +34,28 @@ RUN apk add --no-cache \
     bash
 
 # Install PHP extensions
-RUN docker-php-ext-install pdo pdo_mysql mbstring zip
+RUN apk add --no-cache \
+    icu-dev \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    freetype-dev \
+    oniguruma-dev \
+    libzip-dev \
+    zip \
+    unzip
+
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+    && docker-php-ext-install \
+        pdo \
+        pdo_mysql \
+        mbstring \
+        zip \
+        bcmath \
+        exif \
+        intl \
+        gd \
+        opcache
+
 
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
@@ -48,7 +69,12 @@ COPY . .
 COPY --from=frontend /app/public/build ./public/build
 
 # Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --prefer-dist \
+    --optimize-autoloader \
+    --no-scripts
 
 # Environment variables
 ENV APP_ENV=production \
