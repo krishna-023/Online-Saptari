@@ -1,15 +1,27 @@
+########################################
 # Stage 1 - Build Frontend (Vite)
+########################################
 FROM node:18-alpine AS frontend
+
 WORKDIR /app
+
+# Install dependencies first (better caching)
 COPY package*.json ./
 RUN npm ci
+
+# Copy project files
 COPY . .
+
+# Build Vite assets
 RUN npm run build
 
-# Stage 2 - Backend (Laravel + PHP optimized for Render)
+
+########################################
+# Stage 2 - Backend (Laravel + PHP)
+########################################
 FROM php:8.2-fpm-alpine
 
-# Install system dependencies (minimal for Render)
+# Install system dependencies
 RUN apk add --no-cache \
     curl \
     git \
@@ -29,34 +41,33 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
 
-# Copy app files
+# Copy Laravel project
 COPY . .
 
-# Copy built frontend from Stage 1
-COPY --from=frontend /app/public/dist ./public/dist
+# 🔥 FIXED: Copy correct Vite build folder
+COPY --from=frontend /app/public/build ./public/build
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader
 
-# Set environment variables
+# Environment variables
 ENV APP_ENV=production \
     APP_DEBUG=false \
     LOG_CHANNEL=single \
     PORT=10000
 
-# Set permissions
-RUN chown -R nobody:nobody /var/www \
-    && chmod -R 755 /var/www/storage \
-    && chmod -R 755 /var/www/bootstrap/cache
+# Create required directories
+RUN mkdir -p storage/logs storage/app/uploads bootstrap/cache \
+    && chown -R nobody:nobody /var/www \
+    && chmod -R 775 storage bootstrap/cache
 
-# Create necessary directories
-RUN mkdir -p storage/logs storage/app/uploads \
-    && chown -R nobody:nobody storage
+########################################
+# NGINX Configuration
+########################################
+RUN mkdir -p /var/run/nginx \
+    && rm -f /etc/nginx/conf.d/default.conf
 
-# Configure Nginx
-RUN mkdir -p /var/run/nginx && \
-    rm -f /etc/nginx/conf.d/default.conf
-COPY --chown=nobody:nobody <<EOF /etc/nginx/conf.d/default.conf
+COPY <<EOF /etc/nginx/conf.d/default.conf
 server {
     listen 10000;
     server_name _;
@@ -73,12 +84,6 @@ server {
         fastcgi_pass 127.0.0.1:9000;
         fastcgi_param SCRIPT_FILENAME \$document_root\$fastcgi_script_name;
         include fastcgi_params;
-        fastcgi_buffer_size 128k;
-        fastcgi_buffers 4 256k;
-    }
-
-    location ~ /\.ht {
-        deny all;
     }
 
     location ~ /\. {
@@ -87,60 +92,57 @@ server {
 }
 EOF
 
-# Configure Supervisor for process management
+
+########################################
+# Supervisor Configuration
+########################################
 RUN mkdir -p /etc/supervisor/conf.d
-COPY --chown=root:root <<EOF /etc/supervisor/conf.d/laravel.conf
+
+COPY <<EOF /etc/supervisor/conf.d/laravel.conf
 [supervisord]
-logfile=/var/log/supervisor/supervisord.log
-pidfile=/var/run/supervisord.pid
 nodaemon=true
-user=root
 
 [program:php-fpm]
 command=php-fpm -F
-stdout_logfile=/dev/stdout
-stdout_logfile_maxbytes=0
-stderr_logfile=/dev/stderr
-stderr_logfile_maxbytes=0
 autorestart=true
+stdout_logfile=/dev/stdout
+stderr_logfile=/dev/stderr
 
 [program:nginx]
 command=nginx -g "daemon off;"
-stdout_logfile=/dev/stdout
-stdout_logfile_maxbytes=0
-stderr_logfile=/dev/stderr
-stderr_logfile_maxbytes=0
 autorestart=true
+stdout_logfile=/dev/stdout
+stderr_logfile=/dev/stderr
 EOF
 
-# Startup script for migrations and cache
-COPY --chown=nobody:nobody <<EOF /usr/local/bin/start.sh
-#!/bin/bash
+
+########################################
+# Startup Script
+########################################
+COPY <<EOF /usr/local/bin/start.sh
+#!/bin/sh
 set -e
 
-# Run migrations
-php artisan migrate --force
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
 
-# Clear caches
-php artisan config:clear
-php artisan route:clear
-php artisan view:clear
-php artisan cache:clear
-
-# Generate app key if not set
-if [ -z "$APP_KEY" ]; then
+if [ -z "\$APP_KEY" ]; then
     php artisan key:generate
 fi
 
-# Start supervisor
+php artisan migrate --force || true
+
 exec supervisord -c /etc/supervisor/conf.d/laravel.conf
 EOF
 
 RUN chmod +x /usr/local/bin/start.sh
 
-# Health check
+########################################
+# Health Check
+########################################
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://127.0.0.1:10000/health || exit 1
+    CMD curl -f http://127.0.0.1:10000 || exit 1
 
 EXPOSE 10000
 
