@@ -75,8 +75,16 @@ ENV APP_ENV=production \
     LOG_CHANNEL=single \
     PORT=10000
 
-# Fix permissions
-RUN mkdir -p storage/logs storage/app/uploads bootstrap/cache \
+########################################
+# Fix Laravel Permissions (IMPORTANT)
+########################################
+RUN mkdir -p \
+    storage/framework/views \
+    storage/framework/cache \
+    storage/framework/sessions \
+    storage/logs \
+    bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
 ################################################
