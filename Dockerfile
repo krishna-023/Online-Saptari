@@ -5,14 +5,10 @@ FROM node:18-alpine AS frontend
 
 WORKDIR /app
 
-# Install dependencies first (better caching)
 COPY package*.json ./
 RUN npm ci
 
-# Copy project files
 COPY . .
-
-# Build Vite assets
 RUN npm run build
 
 
@@ -21,7 +17,9 @@ RUN npm run build
 ########################################
 FROM php:8.2-fpm-alpine
 
-# Install system dependencies
+########################################
+# Install System Dependencies
+########################################
 RUN apk add --no-cache \
     curl \
     git \
@@ -37,7 +35,9 @@ RUN apk add --no-cache \
     supervisor \
     bash
 
-# Install PHP extensions
+########################################
+# Install PHP Extensions
+########################################
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
         pdo \
@@ -50,33 +50,38 @@ RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
         gd \
         opcache
 
+########################################
 # Install Composer
+########################################
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
 
-# Copy Laravel project
+########################################
+# Copy Application
+########################################
 COPY . .
-
-# Copy Vite build
 COPY --from=frontend /app/public/build ./public/build
 
-# Install PHP dependencies
+########################################
+# Install Laravel Dependencies
+########################################
 RUN composer install \
     --no-dev \
     --no-interaction \
     --prefer-dist \
-    --optimize-autoloader \
-    --no-scripts
+    --optimize-autoloader
 
+########################################
 # Environment
+########################################
 ENV APP_ENV=production \
     APP_DEBUG=false \
     LOG_CHANNEL=single \
     PORT=10000
 
 ########################################
-# Fix Laravel Permissions (IMPORTANT)
+# Fix Laravel Permissions (CRITICAL)
 ########################################
 RUN mkdir -p \
     storage/framework/views \
@@ -87,13 +92,15 @@ RUN mkdir -p \
     && chown -R www-data:www-data storage bootstrap/cache \
     && chmod -R 775 storage bootstrap/cache
 
-################################################
-# CLEAN NGINX CONFIG (IMPORTANT FIX)
-################################################
+########################################
+# Clean Nginx Default Config
+########################################
+RUN rm -rf /etc/nginx/conf.d/* \
+    && rm -f /etc/nginx/nginx.conf
 
-RUN rm -rf /etc/nginx/conf.d/*
-RUN rm -f /etc/nginx/nginx.conf
-
+########################################
+# Nginx Config (Production Safe)
+########################################
 COPY <<EOF /etc/nginx/nginx.conf
 worker_processes 1;
 
@@ -136,15 +143,15 @@ http {
 }
 EOF
 
-################################################
-# SUPERVISOR CONFIG
-################################################
-
+########################################
+# Supervisor Config
+########################################
 RUN mkdir -p /etc/supervisor/conf.d
 
 COPY <<EOF /etc/supervisor/conf.d/supervisord.conf
 [supervisord]
 nodaemon=true
+user=root
 
 [program:php-fpm]
 command=php-fpm -F
@@ -159,30 +166,40 @@ stdout_logfile=/dev/stdout
 stderr_logfile=/dev/stderr
 EOF
 
-################################################
-# START SCRIPT
-################################################
-
+########################################
+# Start Script (SAFE ORDER)
+########################################
 COPY <<EOF /usr/local/bin/start.sh
 #!/bin/sh
 set -e
 
-php artisan config:cache || true
-php artisan route:cache || true
-php artisan view:cache || true
+# Clear any old caches
+php artisan config:clear || true
+php artisan route:clear || true
+php artisan view:clear || true
+php artisan cache:clear || true
 
+# Ensure APP_KEY exists
 if [ -z "\$APP_KEY" ]; then
     php artisan key:generate
 fi
 
+# Run migrations safely
 php artisan migrate --force || true
+
+# Rebuild caches AFTER env is ready
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
 
 exec supervisord -c /etc/supervisor/conf.d/supervisord.conf
 EOF
 
 RUN chmod +x /usr/local/bin/start.sh
 
+########################################
+# Expose Port
+########################################
 EXPOSE 10000
 
 CMD ["/usr/local/bin/start.sh"]
-
